@@ -39,7 +39,7 @@ pub struct FlameGraphState {
     pub level_offset: usize,
     pub frame_height: Option<u16>,
     pub frame_width: Option<u16>,
-    pub zoom: Option<ZoomState>,
+    pub zoom_stack: Vec<ZoomState>,
     pub search_pattern: Option<SearchPattern>,
     pub freeze: bool,
     pub view_kind: ViewKind,
@@ -53,7 +53,7 @@ impl Default for FlameGraphState {
             level_offset: 0,
             frame_height: None,
             frame_width: None,
-            zoom: None,
+            zoom_stack: Vec::new(),
             search_pattern: None,
             freeze: false,
             view_kind: ViewKind::FlameGraph,
@@ -72,11 +72,30 @@ impl FlameGraphState {
     }
 
     pub fn set_zoom(&mut self, zoom: ZoomState) {
-        self.zoom = Some(zoom);
+        loop {
+            match self.zoom_stack.last() {
+                Some(prev_zoom) if !prev_zoom.descendants.contains(&zoom.stack_id) => {
+                    self.zoom_stack.pop();
+                }
+                _ => {
+                    break
+                }
+            }
+        }
+        self.zoom_stack.push(zoom);
     }
 
+    pub fn pop_zoom(&mut self) {
+        self.zoom_stack.pop();
+    }
+
+
     pub fn unset_zoom(&mut self) {
-        self.zoom = None;
+        self.zoom_stack.clear();
+    }
+
+    pub fn get_zoom(&self) -> Option<&ZoomState> {
+        self.zoom_stack.last()
     }
 
     pub fn set_search_pattern(&mut self, search_pattern: SearchPattern) {
@@ -107,13 +126,8 @@ impl FlameGraphState {
                 self.select_root();
             }
         }
-        if let Some(zoom) = &mut self.zoom {
-            if let Some(new_stack_id) = Self::get_new_stack_id(&zoom.stack_id, old, new) {
-                zoom.stack_id = new_stack_id;
-            } else {
-                self.unset_zoom();
-            }
-        }
+
+        self.unset_zoom();
         // Preserve search pattern. If expensive, can move this to next flamegraph construction
         // thread and share SearchPattern via Arc but let's keep it simple for now.
         if let Some(p) = &self.search_pattern {

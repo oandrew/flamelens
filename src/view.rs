@@ -45,7 +45,7 @@ impl FlameGraphView {
         self.flamegraph = new_flamegraph;
         // Now the id in ZoomState points to the one in new flamegraph, but the ancestors and
         // descendants are not. Set the zoom again to update them.
-        if let Some(zoom) = &self.state.zoom {
+        if let Some(zoom) = &self.state.get_zoom() {
             self.set_zoom_for_id(zoom.stack_id);
         }
         self.updated_at = std::time::Instant::now();
@@ -132,7 +132,7 @@ impl FlameGraphView {
                 // Use manually specified zoom factor as the descendants / ancentors logic are
                 // handled by the caller
                 expected_frame_width *= zoom_factor;
-            } else if let Some(zoom) = &self.state.zoom {
+            } else if let Some(zoom) = &self.state.get_zoom() {
                 let adjusted_frame_width = expected_frame_width * zoom.zoom_factor;
                 // Important: Must short circuit by checking the adjusted_frame_width >= 1.0
                 // condition first because the is_ancestor_or_descendant check is expensive for very
@@ -213,13 +213,13 @@ impl FlameGraphView {
         // Scaling factor to apply
         let zoom_factor = self
             .state
-            .zoom
+            .get_zoom()
             .as_ref()
             .map(|z| z.zoom_factor)
             .unwrap_or(1.0);
 
         // Count the number of unique levels that are visible
-        let starting_stack_id = if let Some(zoom) = &self.state.zoom {
+        let starting_stack_id = if let Some(zoom) = &self.state.get_zoom() {
             zoom.stack_id
         } else {
             ROOT_ID
@@ -379,7 +379,7 @@ impl FlameGraphView {
             let ancestors = self.flamegraph.get_ancestors(&stack_id);
             let descendants = self.flamegraph.get_descendants(&stack_id);
             if stack_id == ROOT_ID {
-                self.unset_zoom();
+                self.state.unset_zoom();
             } else {
                 let zoom = ZoomState {
                     stack_id,
@@ -387,7 +387,14 @@ impl FlameGraphView {
                     ancestors,
                     descendants,
                 };
-                self.state.set_zoom(zoom);
+                match self.state.get_zoom().as_ref() {
+                    Some(cur_zoom) if cur_zoom.stack_id == zoom.stack_id => {
+                        self.state.pop_zoom();
+                    },
+                    _ => {
+                        self.state.set_zoom(zoom);
+                    }
+                }
             }
         }
     }
@@ -397,7 +404,7 @@ impl FlameGraphView {
     }
 
     pub fn unset_zoom(&mut self) {
-        if let Some(zoom_stack_id) = self.state.zoom.as_ref().map(|z| z.stack_id) {
+        if let Some(zoom_stack_id) = self.state.get_zoom().as_ref().map(|z| z.stack_id) {
             // Restore selected to previous zoom point
             self.select_id(&zoom_stack_id);
         }

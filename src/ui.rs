@@ -198,7 +198,7 @@ impl<'a> FlamelensWidget<'a> {
         let zoom_state = self
             .app
             .flamegraph_state()
-            .zoom
+            .get_zoom()
             .as_ref()
             .map(|zoom| ZoomState {
                 zoom_stack: zoom.stack_id,
@@ -585,7 +585,7 @@ impl<'a> FlamelensWidget<'a> {
         let mut lines = vec![];
         match stack {
             Some(stack) => {
-                let zoom_total_count = self.app.flamegraph_state().zoom.as_ref().map(|zoom| {
+                let zoom_total_count = self.app.flamegraph_state().get_zoom().as_ref().map(|zoom| {
                     self.app
                         .flamegraph()
                         .get_stack(&zoom.stack_id)
